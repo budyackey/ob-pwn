@@ -138,20 +138,7 @@ namespace dSocket
             Console.WriteLine("\n[-] Offset: {0}\tCanary: {1}\tRSP: {2}", offsetStr, canaryStr, RSPStr);            
 
             return inputBuffer;
-        }
-        private static byte[] GetRSP(byte[] inputBuffer)
-        {
-            /* the plan is:  
-             * send a byte.  
-             *  if it's wrong and not a dead byte, the connection will close.
-             *  if it's a dead byte, the connection will hang. set a timeout.
-             *  a good byte will say "Username found!" as expected.
-             *  don't stop on the first byte found!  there may be more.
-             */
-            byte[] toReturn = new byte[8];
-
-            return toReturn;
-        }
+        }        
         private static byte[] GetPayload()
         {
             byte[] bytes = new byte[1024];
