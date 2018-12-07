@@ -24,11 +24,8 @@ def connect():
 def xor_me(_buffer):
 	_to_return = bytearray(len(_buffer))
 	for index in range(0, len(_buffer)):
-		try:
-			_to_return[index] = _buffer[index] ^ 0x0d
-		except:
-			print("index: " + str(index))
-
+		_to_return[index] = _buffer[index] ^ 0x0d
+		
 	return _to_return
 
 def brute_force(_Payload):
