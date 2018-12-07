@@ -20,6 +20,14 @@ def connect():
 	sock.settimeout(1)
 	return sock
 
+def test(_buffer):
+	mySock = connect()
+	recv = mySock.recv(1024)
+	mySock.send(_buffer)
+	recv = mySock.recv(1024)
+	mySock.close()
+	print(recv.decode("utf-8"))
+
 def xor_me(_buffer):
 	_to_return = bytearray(len(_buffer))
 	for index in range(0, len(_buffer)):
@@ -76,14 +84,9 @@ def main():
 	print("[+] RSP found: {0}".format(_RSP_hex))
 
 	## test run - should result in "Username found!"
-	mySock = connect()
-	recv = mySock.recv(1024)
-	mySock.send(_Payload)
-	recv = mySock.recv(1024)
-	print(recv.decode("utf-8"))
+	test(_Payload)	
 
 	## end
-	mySock.close()
 	return 0
 
 if __name__ == '__main__':
